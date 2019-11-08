@@ -34,7 +34,7 @@ public class RuntimeBoard
         return cells.Cast<CellEntity>().Where(x => x.ball != null && x.ball.size == Ball.Size.Dot).ToList();
     }
 
-    public static List<Vector2Int> CheckPath(CellEntity[,] cells, Vector2Int from, Vector2Int to)
+    public List<Vector2Int> CheckPath(CellEntity[,] cells, Vector2Int from, Vector2Int to)
     {
         Vector2Int[,] dad = new Vector2Int[BOARD_SIZE, BOARD_SIZE];
         Vector2Int[] queue = new Vector2Int[BOARD_SIZE * BOARD_SIZE];
@@ -97,7 +97,12 @@ public class RuntimeBoard
         return trace.Where(p => (p.x > -5 && p.y > -5)).ToList<Vector2Int>();
     }
 
-    public static List<Vector2Int> CheckLines(CellEntity[,] cells, Vector2Int point)
+    public List<Vector2Int> CheckLines(Vector2Int point) 
+    {
+        return CheckLines(cells, point);
+    }
+
+    public List<Vector2Int> CheckLines(CellEntity[,] cells, Vector2Int point)
     {
         List<Vector2Int> list = new List<Vector2Int>();
         int x = (int)point.x, y = (int)point.y;
@@ -148,5 +153,19 @@ public class RuntimeBoard
     public static bool IsInside(int x, int y)
     {
         return 0 <= x && BOARD_SIZE > x && 0 <= y && BOARD_SIZE > y;
+    }
+
+    public List<Vector2Int> BuildPath(Vector2Int from, Vector2Int to)
+    {
+        List<Vector2Int> path = new List<Vector2Int>();
+        path = CheckPath(cells, from, to);
+        string debugString = "";
+        foreach (var node in path)
+        {
+            debugString += string.Format("{0}|{1} - ", node.x, node.y);
+        }
+        Debug.Log(debugString);
+
+        return (path != null && path.Count > 0) ? path : null;
     }
 }

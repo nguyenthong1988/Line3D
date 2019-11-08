@@ -58,6 +58,7 @@ public class Ball : ObjectPool
 
     protected void SetTrigger(string trigger)
     {
+        m_Animator.enabled = selected;
         if (m_Animator && !string.IsNullOrEmpty(trigger))
         {
             m_Animator.SetTrigger(trigger);
