@@ -107,6 +107,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   poolName: 
+  explosiveVfx: {fileID: 4117401326131607207, guid: f3fbe6f896c74ce47b484c70f65c1550,
+    type: 3}
 --- !u!95 &939974632
 Animator:
   serializedVersion: 3
@@ -117,7 +119,7 @@ Animator:
   m_GameObject: {fileID: 3991220777656674189}
   m_Enabled: 1
   m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: d586ecf7325404647aa2b05a0dbe1eae, type: 2}
+  m_Controller: {fileID: 9100000, guid: f22df6e67c77a164182ce25e6b9cdcd1, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0

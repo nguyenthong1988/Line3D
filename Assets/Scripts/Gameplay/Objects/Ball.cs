@@ -16,9 +16,10 @@ public class Ball : ObjectPool
     public bool selected { get; protected set; }
     public Action onSelectedChange;
 
+    public ParticleSystem explosiveVfx;
     //
     protected int[] m_ColorTable = { 0xffffff, 0xcd0027, 0x509d28, 0x1d57a9, 0x54b9c1, 0xdd6ba7, 0xffe001, 0x4f3401, 0xe47a0a };
-    Animator m_Animator;
+    protected Animator m_Animator;
 
     void Awake() => Initialize();
 
@@ -35,33 +36,52 @@ public class Ball : ObjectPool
         state = State.Idle;
     }
 
+    public override void ResetObject()
+    {
+        Reset();
+    }
+
     public void SetColor(Color color)
     {
         this.color = color;
         GetComponent<MeshRenderer>().material.color = Utilities.ToColor(m_ColorTable[(int)color + 1]);
     }
 
+    public int GetColor32Code()
+    {
+        return m_ColorTable[(int)(this.color) + 1];
+    }
+
     public void SetSelection(bool select)
     {
         if (selected == select) return;
         selected = select;
-        SetTrigger(selected ? "select" : "idle");
+        SetTrigger(selected ? "selected" : "idle");
         onSelectedChange?.Invoke();
     }
 
     public void SetSize(Size size)
     {
-        this.size = size;
-        float scaleRatio = size == Size.Dot ? 0.25f : 0.5f;
-        transform.localScale = new Vector3(scaleRatio, scaleRatio, scaleRatio);
+        if (this.size != size)
+        {
+            if (size == Size.Ball)
+                SetTrigger("zoomOut");
+            this.size = size;
+        }
     }
 
     protected void SetTrigger(string trigger)
     {
-        m_Animator.enabled = selected;
         if (m_Animator && !string.IsNullOrEmpty(trigger))
         {
             m_Animator.SetTrigger(trigger);
         }
+    }
+
+    public void Explosive()
+    {
+        var effect = Instantiate(explosiveVfx, transform.position, Quaternion.identity);
+        effect.GetComponent<Renderer>().material.color = Utilities.ToColor(m_ColorTable[(int)color + 1]);
+        Destroy(effect, 0.8f);
     }
 }

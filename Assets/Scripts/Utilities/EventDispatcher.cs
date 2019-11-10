@@ -5,25 +5,25 @@ using UnityEngine;
 
 public class Listenner
 {
-    public object target = null;
+    public object caller = null;
     public System.Reflection.MethodInfo callback = null;
 
     public Listenner(object target, System.Reflection.MethodInfo callback)
     {
-        this.target = target;
+        this.caller = target;
         this.callback = callback;
     }
 
     public void Invoke(params object[] args)
     {
-        if (target != null && callback != null)
+        if (caller != null && callback != null)
         {
-            callback.Invoke(target, args);
+            callback.Invoke(caller, args);
         }
     }
 }
 
-public class EventManager : ClassSingleton<EventManager>
+public class EventDispatcher : ClassSingleton<EventDispatcher>
 {
     private static Dictionary<GameEvent, List<Listenner>> m_Subscribers = new Dictionary<GameEvent, List<Listenner>>();
 
@@ -31,19 +31,19 @@ public class EventManager : ClassSingleton<EventManager>
     ///methodName: must be public
     ///
 
-    public void Register(GameEvent eventID, object target, string methodName)
+    public static void Register(object caller, GameEvent eventID, string methodName)
     {
-        var type = target.GetType();
+        var type = caller.GetType();
         System.Reflection.MethodInfo invoker = type.GetMethod(methodName);
 
         if (!m_Subscribers.ContainsKey(eventID))
             m_Subscribers[eventID] = new List<Listenner>();
 
-        if (!IsSubscriberExists(eventID, target))
-            m_Subscribers[eventID].Add(new Listenner(target, invoker));
+        if (!IsSubscriberExists(caller, eventID))
+            m_Subscribers[eventID].Add(new Listenner(caller, invoker));
     }
 
-    public void Dispatch(GameEvent eventID, params object[] args)
+    public static void Dispatch(GameEvent eventID, params object[] args)
     {
         if (!m_Subscribers.TryGetValue(eventID, out var subscribers))
             return;
@@ -54,17 +54,17 @@ public class EventManager : ClassSingleton<EventManager>
         }
     }
 
-    public void UnRegister(GameEvent eventID, object target)
+    public static void UnRegister(object caller, GameEvent eventID)
     {
         if (!m_Subscribers.TryGetValue(eventID, out var subscribers))
             return;
 
-        m_Subscribers[eventID].RemoveAll(l => l.target == target);
+        m_Subscribers[eventID].RemoveAll(l => l.caller == caller);
 
         if (m_Subscribers[eventID].Count == 0) m_Subscribers.Remove(eventID);
     }
 
-    private static bool IsSubscriberExists(GameEvent eventID, object target)
+    private static bool IsSubscriberExists(object caller, GameEvent eventID)
     {
         if (!m_Subscribers.TryGetValue(eventID, out var subscribers)) return false;
 
@@ -72,7 +72,7 @@ public class EventManager : ClassSingleton<EventManager>
 
         for (int i = 0; i < subscribers.Count; i++)
         {
-            if (subscribers[i] == target)
+            if (subscribers[i] == caller)
             {
                 exists = true;
                 break;
@@ -82,11 +82,11 @@ public class EventManager : ClassSingleton<EventManager>
         return exists;
     }
 
-    public void UnRegisterAllInTarget(object target)
+    public static void UnRegisterAllInTarget(object caller)
     {
         foreach (var subscribers in m_Subscribers.Values)
         {
-            subscribers.RemoveAll(l => l.target == target);
+            subscribers.RemoveAll(l => l.caller == caller);
         }
     }
 }

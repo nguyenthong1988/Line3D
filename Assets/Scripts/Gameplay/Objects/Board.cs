@@ -7,6 +7,7 @@ using DG.Tweening;
 
 public class Board : MonoBehaviour
 {
+    public static readonly int MAX_UNDO_STEPS = 10;
     public RuntimeBoard runtimeBoard;
 
     //
@@ -14,15 +15,21 @@ public class Board : MonoBehaviour
     protected Vector3 m_BoardSize;
     protected Vector2 m_CellSize;
 
-    protected Vector2Int m_PrevSelected = Vector2Int.left;
+    protected Vector2Int m_SelectedIndex = Vector2Int.left;
     protected List<Vector2Int> m_PointsToCheck;
     protected List<Vector2Int> m_MovePath;
+    protected Stack<int[]> m_UndoStack;
 
     void Awake() => Initialize();
+
+    private CompositeDisposable m_Disposables = new CompositeDisposable();
 
     protected virtual void Initialize()
     {
         runtimeBoard = new RuntimeBoard();
+        m_PointsToCheck = new List<Vector2Int>();
+        m_MovePath = new List<Vector2Int>();
+        m_UndoStack = new Stack<int[]>();
         m_Collider = GetComponent<Collider>();
         if (m_Collider)
         {
@@ -36,34 +43,34 @@ public class Board : MonoBehaviour
 
     void Start()
     {
-        var mousePressPosStream = Observable.EveryUpdate()
+        Observable.EveryUpdate()
             .Where(_ => Input.GetMouseButtonDown(0))
             .Select(_ => Input.mousePosition)
-            .Subscribe(OnTouchDown);
+            .Subscribe(OnTouchDown).AddTo(m_Disposables);
 
-        var mouseReleasePosStream = Observable.EveryUpdate()
+        Observable.EveryUpdate()
             .Where(_ => Input.GetMouseButtonUp(0))
             .Select(_ => Input.mousePosition)
-            .Subscribe(OnTouchUp);
-
-        StartCoroutine(StartGame());
+            .Subscribe(OnTouchUp).AddTo(m_Disposables);
     }
 
-    public IEnumerator StartGame()
+    public void StartGame()
+    {
+        SpawnDot();
+        CheckBoard();
+        m_UndoStack.Clear();
+        SpawnDot();
+    }
+
+    public void EndGame()
+    {
+        m_Disposables.Clear();
+    }
+
+    public IEnumerator StartDebug()
     {
         yield return new WaitForSeconds(1.0f);
-
-        var emptyCells = runtimeBoard.GetRandomCells(3);
-        foreach (var cell in emptyCells)
-        {
-            var randomColor = (Ball.Color)Random.Range(0, (int)Ball.Color.Yellow);
-            var pos = ComputePosition(cell.rowOffset, cell.colOffset) + new Vector3(0, 0.5f, 0);
-            var ball = Pooler.instance.Spawn<Ball>("ball", pos, transform);
-            ball.SetColor(randomColor);
-            cell.ball = ball;
-            cell.ball.SetSize(Ball.Size.Ball);
-        }
-        SpawnDot();
+        StartGame();
     }
 
     public void OnTouchDown(Vector3 position)
@@ -78,10 +85,10 @@ public class Board : MonoBehaviour
                 Debug.Log("offset : " + offset.x + " | " + offset.y);
                 if (runtimeBoard.cells[offset.x, offset.y].selectable)
                 {
-                    if (m_PrevSelected != Vector2Int.left)
-                        runtimeBoard.cells[m_PrevSelected.x, m_PrevSelected.y]?.SetSelection(false);
+                    if (m_SelectedIndex != Vector2Int.left)
+                        runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y]?.SetSelection(false);
                     runtimeBoard.cells[offset.x, offset.y].SetSelection(true);
-                    m_PrevSelected = offset;
+                    m_SelectedIndex = offset;
                 }
             }
             else if (castHit.collider.GetComponent<Board>())
@@ -90,26 +97,47 @@ public class Board : MonoBehaviour
                 Debug.Log("offset : " + offset.x + " | " + offset.y);
                 if (runtimeBoard.cells[offset.x, offset.y].available)
                 {
-                    if (m_PrevSelected != Vector2Int.left)
-                        MoveBall(m_PrevSelected, new Vector2Int(offset.x, offset.y));
+                    if (m_SelectedIndex != Vector2Int.left)
+                    {
+                        runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y].SetSelection(false);
+                        runtimeBoard.cells[offset.x, offset.y].AttachBall(runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y].DettachBall());
+                        m_PointsToCheck.Clear();
+                        m_PointsToCheck.Add(offset);
+                        //
+                        MoveBall(m_SelectedIndex, offset);
+                        m_SelectedIndex = Vector2Int.left;
+                    }
                 }
             }
         }
-
-        SpawnDot();
     }
 
     private void SpawnDot()
     {
+        var colors = new int[3];
         var emptyCells = runtimeBoard.GetRandomCells(3);
-        foreach (var cell in emptyCells)
+        if (emptyCells.Count < 3)
         {
-            var randomColor = (Ball.Color)Random.Range(0, (int)Ball.Color.Ghost + 1);
-            var pos = ComputePosition(cell.rowOffset, cell.colOffset) + new Vector3(0, 0.5f, 0);
+            GameManager.instance.ChangeGamestate(GameManager.GameState.EndGame);
+            return;
+        }
+        int maxRange = (int)(GameManager.instance.hardMode == GameManager.HardMode.Normal ? Ball.Color.Magenta :
+            GameManager.instance.hardMode == GameManager.HardMode.Hard ? Ball.Color.Brown :
+            Ball.Color.Ghost) + 1;
+        for (int i = 0; i < emptyCells.Count; i++)
+        {
+            var cell = emptyCells[i];
+            var randomColor = (Ball.Color)Random.Range(0, maxRange);
+            var pos = ComputePosition(cell.rowOffset, cell.colOffset);
             var ball = Pooler.instance.Spawn<Ball>("ball", pos, transform);
             ball.SetColor(randomColor);
             cell.ball = ball;
+
+            colors[i] = ball.GetColor32Code();
         }
+        EventDispatcher.Dispatch(GameEvent.GE_ADD_DOT_COLOR, colors[0], colors[1], colors[2]);
+        m_UndoStack.Push(runtimeBoard.BoardData());
+        if (m_UndoStack.Count > MAX_UNDO_STEPS) m_UndoStack.Peek();
     }
 
     private Vector2Int GetBoardOffset(Vector3 point)
@@ -125,7 +153,7 @@ public class Board : MonoBehaviour
 
     private Vector3 ComputePosition(int row, int col)
     {
-        return new Vector3(-m_BoardSize.x * 0.5f + row * m_CellSize.x + m_CellSize.x / 2 + transform.position.x, transform.position.y, -m_BoardSize.z * 0.5f + col * m_CellSize.y + m_CellSize.y / 2 + transform.position.z);
+        return new Vector3(-m_BoardSize.x * 0.5f + row * m_CellSize.x + m_CellSize.x / 2 + transform.position.x, transform.position.y + 0.5f, -m_BoardSize.z * 0.5f + col * m_CellSize.y + m_CellSize.y / 2 + transform.position.z);
     }
 
     protected void MoveBall(Vector2Int from, Vector2Int to)
@@ -138,7 +166,7 @@ public class Board : MonoBehaviour
             {
                 worldMovePath.Add(ComputePosition(point.x, point.y));
             }
-            runtimeBoard.cells[m_PrevSelected.x, m_PrevSelected.y].ball.transform.DOPath(worldMovePath.ToArray(), 0.5f);
+            runtimeBoard.cells[to.x, to.y].ball.transform.DOPath(worldMovePath.ToArray(), 0.3f).OnComplete(() => OnMovePathDone());
         }
     }
 
@@ -147,6 +175,7 @@ public class Board : MonoBehaviour
         Debug.Log("mOnMoveDone");
 
         CheckBoard();
+        SpawnDot();
 
         if (m_PointsToCheck.Count > 0)
         {
@@ -156,12 +185,16 @@ public class Board : MonoBehaviour
 
                 if (points != null && points.Count > 0)
                 {
+                    Debug.Log("add score");
+                    EventDispatcher.Dispatch(GameEvent.GE_ADD_SCORE, points.Count);
                     foreach (var p in points) ExplodeBall(p);
                 }
             }
 
             m_PointsToCheck.Clear();
         }
+
+        //m_PrevSelected = Vector2Int.left;
     }
 
     public void CheckBoard()
@@ -176,6 +209,8 @@ public class Board : MonoBehaviour
 
     protected void ExplodeBall(Vector2Int cellIndex)
     {
-
+        runtimeBoard.cells[cellIndex.x, cellIndex.y].ball.Explosive();
+        runtimeBoard.cells[cellIndex.x, cellIndex.y].ball.Destroy();
+        runtimeBoard.cells[cellIndex.x, cellIndex.y].ball = null;
     }
 }

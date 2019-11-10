@@ -34,13 +34,11 @@ public class RuntimeBoard
         return cells.Cast<CellEntity>().Where(x => x.ball != null && x.ball.size == Ball.Size.Dot).ToList();
     }
 
-    public List<Vector2Int> CheckPath(CellEntity[,] cells, Vector2Int from, Vector2Int to)
+    public List<Vector2Int> CheckPath(CellEntity[,] cells, Vector2Int from, Vector2Int to, bool isGhostBall = false)
     {
         Vector2Int[,] dad = new Vector2Int[BOARD_SIZE, BOARD_SIZE];
         Vector2Int[] queue = new Vector2Int[BOARD_SIZE * BOARD_SIZE];
         Vector2Int[] trace = new Vector2Int[BOARD_SIZE * BOARD_SIZE];
-
-        bool ghostCell = cells[from.x, from.y].ball.color >= Ball.Color.Ghost;
 
         int[] u = { 1, 0, -1, 0 };
         int[] v = { 0, 1, 0, -1 };
@@ -85,7 +83,7 @@ public class RuntimeBoard
 
                 if (!IsInside(dir.x, dir.y)) continue;
 
-                if (dad[dir.x, dir.y].x == -1 && ((cells[dir.x, dir.y].available || ghostCell)))
+                if (dad[dir.x, dir.y].x == -1 && ((cells[dir.x, dir.y].available || isGhostBall)))
                 {
                     last++;
                     queue[last] = dir;
@@ -97,7 +95,7 @@ public class RuntimeBoard
         return trace.Where(p => (p.x > -5 && p.y > -5)).ToList<Vector2Int>();
     }
 
-    public List<Vector2Int> CheckLines(Vector2Int point) 
+    public List<Vector2Int> CheckLines(Vector2Int point)
     {
         return CheckLines(cells, point);
     }
@@ -167,5 +165,23 @@ public class RuntimeBoard
         Debug.Log(debugString);
 
         return (path != null && path.Count > 0) ? path : null;
+    }
+
+    public int[] BoardData()
+    {
+        int[] data = new int[BOARD_SIZE * BOARD_SIZE];
+        int count = 0;
+        foreach (var cell in cells)
+        {
+            int value = 0;
+            if (!cell.empty)
+            {
+                value = (int)(cell.ball.color) + (cell.ball.size == Ball.Size.Dot ? 0 : 5);
+            }
+            data[count] = value;
+            count++;
+        }
+
+        return data;
     }
 }

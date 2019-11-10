@@ -32,10 +32,26 @@ public class CellEntity
         onSelectedChange?.Invoke();
     }
 
-    
-    public bool empty => ball == null && state < State.Block;
+
+    public bool empty => ball == null;// && state < State.Block;
 
     public bool selectable => ball != null && ball.size == Ball.Size.Ball;
 
-    public bool available => !ball || ball.size <= Ball.Size.Dot;
+    public bool available => ball == null || ball.size <= Ball.Size.Dot;
+
+    public void AttachBall(Ball ball)
+    {
+        if (!ball) return;
+
+        if (this.ball != null) DettachBall().Destroy();
+
+        this.ball = ball;
+    }
+
+    public Ball DettachBall()
+    {
+        Ball ball = this.ball;
+        this.ball = null;
+        return ball;
+    }
 }
