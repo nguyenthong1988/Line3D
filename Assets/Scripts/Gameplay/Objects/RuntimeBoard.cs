@@ -153,10 +153,10 @@ public class RuntimeBoard
         return 0 <= x && BOARD_SIZE > x && 0 <= y && BOARD_SIZE > y;
     }
 
-    public List<Vector2Int> BuildPath(Vector2Int from, Vector2Int to)
+    public List<Vector2Int> BuildPath(Vector2Int from, Vector2Int to, bool isGhostBall = false)
     {
         List<Vector2Int> path = new List<Vector2Int>();
-        path = CheckPath(cells, from, to);
+        path = CheckPath(cells, from, to, isGhostBall);
         string debugString = "";
         foreach (var node in path)
         {
@@ -173,15 +173,26 @@ public class RuntimeBoard
         int count = 0;
         foreach (var cell in cells)
         {
-            int value = 0;
-            if (!cell.empty)
-            {
-                value = (int)(cell.ball.color) + (cell.ball.size == Ball.Size.Dot ? 0 : 5);
-            }
-            data[count] = value;
+            data[count] = BoardCellToValue(cell);
             count++;
         }
 
         return data;
+    }
+
+    public int BoardCellToValue(CellEntity cell)
+    {
+        int value = 0;
+        if (!cell.empty)
+        {
+            value = (int)(cell.ball.color) * 10 + (cell.ball.size == Ball.Size.Dot ? 0 : 5);
+        }
+
+        return value;
+    }
+
+    public (Ball.Color, Ball.Size) ValueToBoardCell(int value)
+    {
+        return ((Ball.Color)(value / 10), (Ball.Size)(value % 10) == 0 ? Ball.Size.Dot : Ball.Size.Ball);
     }
 }

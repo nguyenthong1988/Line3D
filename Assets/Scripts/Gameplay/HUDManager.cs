@@ -36,7 +36,7 @@ public class HUDManager : Singleton<HUDManager>
 
     public void UpdateHighScore()
     {
-        highScoreText?.SetText(string.Format("SCORE: {0}", GameManager.instance.score));
+        highScoreText?.SetText(string.Format("HIGH SCORE: {0}", GameManager.instance.highScore));
     }
 
     public void ShowBeginGame()
@@ -47,5 +47,6 @@ public class HUDManager : Singleton<HUDManager>
     public void ShowEndGame()
     {
         endGameUI?.gameObject.SetActive(true);
+        endGameUI?.OnShowEndGame();
     }
 }

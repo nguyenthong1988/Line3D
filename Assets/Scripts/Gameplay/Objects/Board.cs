@@ -60,6 +60,7 @@ public class Board : MonoBehaviour
         CheckBoard();
         m_UndoStack.Clear();
         SpawnDot();
+        SaveBoardState();
     }
 
     public void EndGame()
@@ -100,11 +101,17 @@ public class Board : MonoBehaviour
                     if (m_SelectedIndex != Vector2Int.left)
                     {
                         runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y].SetSelection(false);
-                        runtimeBoard.cells[offset.x, offset.y].AttachBall(runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y].DettachBall());
-                        m_PointsToCheck.Clear();
-                        m_PointsToCheck.Add(offset);
-                        //
-                        MoveBall(m_SelectedIndex, offset);
+                        CheckMovePath(m_SelectedIndex, offset, runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y].ball.color == Ball.Color.Ghost);
+                        if (!m_MovePath.IsNullOrEmpty())
+                        {
+                            SaveBoardState();
+                            runtimeBoard.cells[offset.x, offset.y].AttachBall(runtimeBoard.cells[m_SelectedIndex.x, m_SelectedIndex.y].DettachBall());
+                            m_PointsToCheck.Clear();
+                            m_PointsToCheck.Add(offset);
+                            //
+                            MoveBall(m_SelectedIndex, offset, runtimeBoard.cells[offset.x, offset.y].ball.color == Ball.Color.Ghost);
+                        }
+
                         m_SelectedIndex = Vector2Int.left;
                     }
                 }
@@ -129,15 +136,50 @@ public class Board : MonoBehaviour
             var cell = emptyCells[i];
             var randomColor = (Ball.Color)Random.Range(0, maxRange);
             var pos = ComputePosition(cell.rowOffset, cell.colOffset);
-            var ball = Pooler.instance.Spawn<Ball>("ball", pos, transform);
+            var ball = Pooler.instance.Spawn<Ball>(randomColor == Ball.Color.Ghost ? "ghost_ball" : "ball", pos, transform);
             ball.SetColor(randomColor);
             cell.ball = ball;
 
             colors[i] = ball.GetColor32Code();
         }
         EventDispatcher.Dispatch(GameEvent.GE_ADD_DOT_COLOR, colors[0], colors[1], colors[2]);
+    }
+
+    public void SaveBoardState()
+    {
         m_UndoStack.Push(runtimeBoard.BoardData());
         if (m_UndoStack.Count > MAX_UNDO_STEPS) m_UndoStack.Peek();
+    }
+
+    public void RestorePreBoardState()
+    {
+        if (m_UndoStack.Count == 0) return;
+
+        var boardState = m_UndoStack.Pop();
+        int count = 0;
+        foreach (var cell in runtimeBoard.cells)
+        {
+            if (runtimeBoard.BoardCellToValue(cell) != boardState[count])
+            {
+                Debug.Log("111 : " + runtimeBoard.BoardCellToValue(cell));
+                Debug.Log("222 : " + boardState[count]);
+                if (!runtimeBoard.cells[cell.rowOffset, cell.colOffset].empty)
+                {
+                    runtimeBoard.cells[cell.rowOffset, cell.colOffset].ball.Destroy();
+                    runtimeBoard.cells[cell.rowOffset, cell.colOffset].ball = null;
+                }
+
+                if (boardState[count] != 0)
+                {
+                    var ballDefine = runtimeBoard.ValueToBoardCell(boardState[count]);
+                    var ball = Pooler.instance.Spawn<Ball>(ballDefine.Item1 == Ball.Color.Ghost ? "ghost_ball" : "ball", ComputePosition(cell.rowOffset, cell.colOffset), transform);
+                    ball.SetColor(ballDefine.Item1);
+                    ball.SetSize(ballDefine.Item2);
+                    runtimeBoard.cells[cell.rowOffset, cell.colOffset].ball = ball;
+                }
+            }
+            count++;
+        }
     }
 
     private Vector2Int GetBoardOffset(Vector3 point)
@@ -156,13 +198,17 @@ public class Board : MonoBehaviour
         return new Vector3(-m_BoardSize.x * 0.5f + row * m_CellSize.x + m_CellSize.x / 2 + transform.position.x, transform.position.y + 0.5f, -m_BoardSize.z * 0.5f + col * m_CellSize.y + m_CellSize.y / 2 + transform.position.z);
     }
 
-    protected void MoveBall(Vector2Int from, Vector2Int to)
+    public void CheckMovePath(Vector2Int from, Vector2Int to, bool isGhostBall = false)
     {
-        var movePath = runtimeBoard.BuildPath(from, to);
-        if (!movePath.IsNullOrEmpty())
+        m_MovePath = runtimeBoard.BuildPath(from, to, isGhostBall);
+    }
+
+    protected void MoveBall(Vector2Int from, Vector2Int to, bool isGhostBall = false)
+    {
+        if (!m_MovePath.IsNullOrEmpty())
         {
             var worldMovePath = new List<Vector3>();
-            foreach (var point in movePath)
+            foreach (var point in m_MovePath)
             {
                 worldMovePath.Add(ComputePosition(point.x, point.y));
             }
@@ -193,8 +239,25 @@ public class Board : MonoBehaviour
 
             m_PointsToCheck.Clear();
         }
-
         //m_PrevSelected = Vector2Int.left;
+    }
+
+    public void ChangDot()
+    {
+        var availableCells = runtimeBoard.GetDotCells();
+        foreach (var cell in availableCells)
+        {
+            if (!runtimeBoard.cells[cell.rowOffset, cell.colOffset].empty)
+            {
+                runtimeBoard.cells[cell.rowOffset, cell.colOffset].ball.Destroy();
+                runtimeBoard.cells[cell.rowOffset, cell.colOffset].ball = null;
+            }
+        }
+
+        SpawnDot();
+
+        if (m_UndoStack.Count > 0) m_UndoStack.Pop();
+        SaveBoardState();
     }
 
     public void CheckBoard()

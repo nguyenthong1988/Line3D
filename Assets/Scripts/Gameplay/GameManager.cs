@@ -66,12 +66,12 @@ public class GameManager : Singleton<GameManager>
     {
         this.score += score;
         HUDManager.instance.UpdateScore();
-        
-        if (score > highScore)
+
+        if (this.score > highScore)
         {
-            highScore = score;
+            highScore = this.score;
             PlayerPrefs.SetInt("_PREF_GAME_HIGH_SCORE", highScore);
-            HUDManager.instance.UpdatePlayedTime();
+            HUDManager.instance.UpdateHighScore();
         }
     }
 
@@ -86,6 +86,8 @@ public class GameManager : Singleton<GameManager>
                 playedTime = 0;
                 score = 0;
                 HUDManager.instance.ShowBeginGame();
+                HUDManager.instance.UpdateScore();
+                HUDManager.instance.UpdateHighScore();
                 break;
             case GameState.InGame:
                 hardMode = GetHardMode();
@@ -107,5 +109,13 @@ public class GameManager : Singleton<GameManager>
         if (hardModeStr == "ghost") return HardMode.Ghost;
 
         return HardMode.Normal;
+    }
+
+    public void DoBoardCommand(string command)
+    {
+        if (command == "undo")
+            board?.RestorePreBoardState();
+        else if (command == "change_dot")
+            board?.ChangDot();
     }
 }
